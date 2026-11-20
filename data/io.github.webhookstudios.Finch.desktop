@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Finch
+GenericName=Podcasts and Radio
+Comment=Find, follow and listen to podcasts and internet radio
+Exec=finch-player
+Icon=io.github.webhookstudios.Finch
+Terminal=false
+StartupNotify=true
+StartupWMClass=io.github.webhookstudios.Finch
+Categories=AudioVideo;Audio;Player;GTK;GNOME;
+Keywords=sedge;podcast;podcasts;radio;internet radio;stream;station;episode;rss;opml;listen;

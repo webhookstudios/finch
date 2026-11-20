@@ -1,0 +1,5 @@
+#!/usr/bin/python3
+import sys
+sys.path.insert(0, '/usr/lib/finch-player')
+from finch.app import main
+sys.exit(main())
