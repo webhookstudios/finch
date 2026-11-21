@@ -248,6 +248,14 @@ scale.vol highlight { min-height: 4px; border-radius: 999px; background-color: v
 .accent-dot { min-width: 28px; min-height: 28px; border-radius: 999px; padding: 0; }
 .accent-dot.selected { box-shadow: 0 0 0 3px var(--window-bg-color), 0 0 0 5px var(--window-fg-color); }
 .notes { font-size: 0.95em; }
+.tile-sub {
+  min-width: 34px; min-height: 34px; padding: 0;
+  background-color: var(--accent-bg-color); color: var(--accent-fg-color);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
+  opacity: 0; transition: opacity 140ms ease-out;
+}
+.tile:hover .tile-sub, .tile:focus-within .tile-sub, .tile-sub.subscribed { opacity: 1; }
+.tile-sub.subscribed { background-color: var(--popover-bg-color); color: var(--accent-color); }
 .style-picker { padding: 6px 4px 2px 4px; }
 .style-picker .pick-label { font-size: 0.85em; font-weight: 700; opacity: 0.7; }
 .swatch { min-width: 30px; min-height: 30px; padding: 0; border-radius: 999px; }

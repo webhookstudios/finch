@@ -3,7 +3,7 @@ import gi
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .. import directory, net  # noqa: E402
 from .widgets import (Art, EpisodeRow, ShowTile, boxed_list, clear, flat_button, page_header,  # noqa: E402
@@ -115,8 +115,21 @@ class ShowPage(Adw.NavigationPage):
         self.refresh_btn = flat_button('view-refresh-symbolic', 'Check for new episodes',
                                        lambda: self.library.refresh([feed]))
         header.pack_end(self.refresh_btn)
-        self.web_btn = flat_button('web-browser-symbolic', "Open the show's website", self._open_site)
-        header.pack_end(self.web_btn)
+        # The More menu: page actions under the 'show.' prefix.
+        group = Gio.SimpleActionGroup()
+        self.all_played_action = Gio.SimpleAction.new('mark-all-played', None)
+        self.all_played_action.connect('activate', lambda *_: self._mark_all_played())
+        group.add_action(self.all_played_action)
+        self.site_action = Gio.SimpleAction.new('open-site', None)
+        self.site_action.connect('activate', lambda *_: self._open_site())
+        group.add_action(self.site_action)
+        self.insert_action_group('show', group)
+        self.more_menu = Gio.Menu()
+        self.more_menu.append('Mark All as Played', 'show.mark-all-played')
+        self.more_menu.append('Open Show Website', 'show.open-site')
+        self.more_btn_menu = Gtk.MenuButton(icon_name='view-more-symbolic', tooltip_text='More',
+                                            menu_model=self.more_menu)
+        header.pack_end(self.more_btn_menu)
 
         self.body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         top = Gtk.Box(spacing=20, margin_start=24, margin_end=24, margin_top=18, margin_bottom=12)
@@ -217,7 +230,7 @@ class ShowPage(Adw.NavigationPage):
         self.desc.set_visible(bool(s.get('description')))
         self.more_btn.set_visible(len(s.get('description') or '') > 220)
         self.art.set_url(s.get('image'))
-        self.web_btn.set_visible(bool(s.get('link')))
+        self.site_action.set_enabled(bool(s.get('link')))
         subbed = self.library.is_subscribed(self.feed)
         self.sub_btn.set_label('Unsubscribe' if subbed else 'Subscribe')
         for c in ('suggested-action', 'destructive-action'):
@@ -225,6 +238,9 @@ class ShowPage(Adw.NavigationPage):
         self.sub_btn.add_css_class('suggested-action' if not subbed else 'flat')
         self.refresh_btn.set_visible(subbed)
         self.filter.set_visible(subbed)
+        left = sum(1 for e in s.get('episodes') or [] if not self.library.st(e['id']).get('played'))
+        self.all_played_action.set_enabled(subbed and left > 0)
+        self.more_btn_menu.set_visible(subbed or bool(s.get('link')))
         self._fill_episodes()
         self.stack.set_visible_child_name('show')
 
@@ -288,6 +304,20 @@ class ShowPage(Adw.NavigationPage):
                 self.sub_btn.set_sensitive(True)
                 self.win.toast(msg)
             self.library.subscribe(self.feed, self.show, done, fail)
+
+    def _mark_all_played(self):
+        ids = [e['id'] for e in self.show.get('episodes') or [] if not self.library.st(e['id']).get('played')]
+        if not ids:
+            return
+        # Leave the episode that's playing alone; it gets marked when it finishes.
+        cur = self.win.player.item
+        if cur and cur.get('id') in ids:
+            ids.remove(cur['id'])
+        before = self.library.mark_all_played(ids)
+        toast = Adw.Toast(title=f"Marked {len(ids)} episode{'' if len(ids) == 1 else 's'} as played",
+                          button_label='Undo', timeout=8)
+        toast.connect('button-clicked', lambda *_: self.library.restore_states(before))
+        self.win.toasts.add_toast(toast)
 
     def _open_site(self):
         link = self.show.get('link')
@@ -380,6 +410,10 @@ class DiscoverPage(Page):
         self.stack.add_named(Adw.Spinner(width_request=40, height_request=40, halign=Gtk.Align.CENTER,
                                          valign=Gtk.Align.START, margin_top=40), 'loading')
         self.err = status('network-offline-symbolic', 'Nothing came back')
+        self.retry = Gtk.Button(label='Try Again', halign=Gtk.Align.CENTER)
+        self.retry.add_css_class('pill')
+        self.retry.connect('clicked', lambda *_: self._run())
+        self.err.set_child(self.retry)
         self.stack.add_named(self.err, 'error')
         self._timer = 0
         self._token = 0
@@ -434,15 +468,17 @@ class DiscoverPage(Page):
     def _show(self, results):
         clear(self.grid)
         for s in results:
-            self.grid.append(ShowTile(s))
+            self.grid.append(ShowTile(s, win=self.win))
         if results:
             self.stack.set_visible_child_name('grid')
         else:
             self.err.set_title('No podcasts found')
             self.err.set_description('Try other words, or paste the show’s feed address.')
+            self.retry.set_visible(False)
             self.stack.set_visible_child_name('error')
 
     def _fail(self, msg):
         self.err.set_title('Couldn’t reach the podcast directory')
         self.err.set_description(msg)
+        self.retry.set_visible(True)
         self.stack.set_visible_child_name('error')

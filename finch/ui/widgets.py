@@ -272,9 +272,15 @@ class StationRow(Gtk.ListBoxRow):
 
 
 class ShowTile(Gtk.FlowBoxChild):
-    def __init__(self, show, badge=0):
+    """A show's artwork and name. Given the window, it also gets a quick-subscribe button in its corner,
+    shown on hover."""
+
+    def __init__(self, show, badge=0, win=None):
         super().__init__()
         self.show = show
+        self.win = win
+        self.sub = None
+        self._busy = False
         self.add_css_class('tile')
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, width_request=160)
         frame = Gtk.Overlay()
@@ -285,6 +291,15 @@ class ShowTile(Gtk.FlowBoxChild):
             b.add_css_class('badge-new')
             b.set_tooltip_text(f"{badge} new episode{'' if badge == 1 else 's'}")
             frame.add_overlay(b)
+        if win is not None and show.get('feed'):
+            self.sub = Gtk.Button(halign=Gtk.Align.END, valign=Gtk.Align.START, margin_top=6, margin_end=6,
+                                  focus_on_click=False)
+            self.sub.add_css_class('circular')
+            self.sub.add_css_class('tile-sub')
+            self.sub.connect('clicked', self._sub_clicked)
+            frame.add_overlay(self.sub)
+            win.rows.add(self)
+            self.sync()
         box.append(frame)
         name = Gtk.Label(label=show['title'], xalign=0, wrap=True, lines=2, ellipsize=Pango.EllipsizeMode.END,
                          max_width_chars=18, wrap_mode=Pango.WrapMode.WORD_CHAR)
@@ -297,6 +312,46 @@ class ShowTile(Gtk.FlowBoxChild):
             box.append(a)
         self.set_child(box)
         self.set_tooltip_text(show['title'])
+
+    def key(self):
+        return None
+
+    def sync(self):
+        if not self.sub:
+            return
+        subbed = self.win.library.is_subscribed(self.show['feed'])
+        if self._busy:
+            self.sub.set_icon_name('content-loading-symbolic')
+            self.sub.set_tooltip_text('Subscribing…')
+        elif subbed:
+            self.sub.set_icon_name('object-select-symbolic')
+            self.sub.set_tooltip_text('Subscribed. Click to open the show')
+        else:
+            self.sub.set_icon_name('list-add-symbolic')
+            self.sub.set_tooltip_text(f"Subscribe to {self.show['title']}")
+        (self.sub.add_css_class if subbed else self.sub.remove_css_class)('subscribed')
+
+    def _sub_clicked(self, *_):
+        lib = self.win.library
+        feed = self.show['feed']
+        if self._busy:
+            return
+        if lib.is_subscribed(feed):
+            self.win.open_show(feed, self.show)
+            return
+        self._busy = True
+        self.sync()
+
+        def done(_show):
+            self._busy = False
+            self.sync()
+            self.win.toast(f"Subscribed to {self.show['title']}")
+
+        def fail(msg):
+            self._busy = False
+            self.sync()
+            self.win.toast(f"Couldn't subscribe to {self.show['title']}. {msg}")
+        lib.subscribe(feed, None, done, fail)
 
 
 def boxed_list():

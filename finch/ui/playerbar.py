@@ -254,6 +254,8 @@ class PlayerBar(Gtk.Box):
         self._show_pct()
 
     def _vol_event(self, _c, event):
+        if event is None:
+            return False
         t = event.get_event_type()
         if t in (Gdk.EventType.BUTTON_PRESS, Gdk.EventType.TOUCH_BEGIN):
             self._sliding = True

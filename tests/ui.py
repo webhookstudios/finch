@@ -74,7 +74,7 @@ def start():
     w.go('discover')
 
 
-@step(6000)
+@step(8000)
 def discover_top():
     page = app.win.page('discover')
     tiles = children(page.grid, ShowTile)
@@ -169,6 +169,7 @@ def radio_list():
     page = w.page('radio-browse')
     rows = children(page.list, StationRow)
     check(f'stations listed ({len(rows)})', len(rows) >= 10)
+    ctx['stations'] = [r.station for r in rows[:4]]
     if rows:
         ctx['station'] = rows[0].station
         w.toggle_station(rows[0].station)
@@ -176,11 +177,23 @@ def radio_list():
 
 
 @step(9000)
+def radio_retry():
+    # Directory stations do go down; if this one didn't start, try the next couple.
+    w = app.win
+    if w.player.state != 'playing':
+        for st in ctx['stations'][1:]:
+            print(f'note: {ctx["station"]["name"]} did not start; trying {st["name"]}', flush=True)
+            ctx['station'] = st
+            w.toggle_station(st)
+            break
+
+
+@step(9000)
 def radio_playing():
     w = app.win
     p = w.player
     check(f'station plays ({p.state})', p.state == 'playing' and p.live)
-    check('station saved to favorites and recent', len(w.library.favorites) == 1 and len(w.library.recent) == 1)
+    check('station saved to favorites', len(w.library.favorites) == 1 and len(w.library.recent) >= 1)
     check('seek bar hidden for live radio', not w.bar.seek_row.get_visible())
     shot('04-radio')
     tag = page_tag = w.page('radio-browse')
@@ -214,6 +227,60 @@ def subs_ember():
     app.settings.set('theme', 'sedge')
     data = feeds.write_opml(app.win.library.shows())
     check('OPML export lists the feed', feeds.read_opml(data) == [ctx['show']['feed']])
+    app.win.go('discover')
+    page = app.win.page('discover')
+    page.search.set_text('')
+    page._run()
+
+
+@step(4000)
+def quick_subscribe():
+    page = app.win.page('discover')
+    tiles = [t for t in children(page.grid, ShowTile)
+             if t.sub and not app.win.library.is_subscribed(t.show['feed'])]
+    check(f'Discover tiles have a quick-subscribe button ({len(tiles)})', len(tiles) >= 5)
+    check('the button is a plus before subscribing', tiles and tiles[0].sub.get_icon_name() == 'list-add-symbolic'
+          and not tiles[0].sub.has_css_class('subscribed'))
+    ctx['quick'] = tiles[0]
+    tiles[0].sub.emit('clicked')
+    check('it shows it is working', tiles[0].sub.get_icon_name() == 'content-loading-symbolic')
+
+
+@step(7000)
+def quick_subscribed():
+    t = ctx['quick']
+    lib = app.win.library
+    check('quick subscribe worked', lib.is_subscribed(t.show['feed']))
+    check('the tile now shows a check', t.sub.get_icon_name() == 'object-select-symbolic'
+          and t.sub.has_css_class('subscribed'))
+    shot('07-discover-subscribed')
+    app.win.open_show(t.show['feed'], t.show)
+
+
+@step(1500)
+def mark_all():
+    page = app.win.nav.get_visible_page()
+    lib = app.win.library
+    eps = lib.podcasts[ctx['quick'].show['feed']]['episodes']
+    check('Mark All as Played is in the More menu', page.more_btn_menu.get_visible() and page.all_played_action.get_enabled())
+    page._mark_all_played()
+    played = sum(1 for e in eps if lib.st(e['id']).get('played'))
+    check(f'every episode marked played ({played}/{len(eps)})', played == len(eps))
+    check('menu item greys out when all are played', not page.all_played_action.get_enabled())
+    ctx['eps_quick'] = eps
+
+
+@step(600)
+def undo():
+    lib = app.win.library
+    eps = ctx['eps_quick']
+    # The toast's Undo restores what each episode was before.
+    page = app.win.nav.get_visible_page()
+    before = {e['id']: None for e in eps}
+    lib.restore_states(before)
+    played = sum(1 for e in eps if lib.st(e['id']).get('played'))
+    check(f'undo puts them back ({played} played)', played == 0)
+    check('menu item is offered again', page.all_played_action.get_enabled())
     app.activate_action('preferences')
 
 

@@ -198,7 +198,7 @@ class FinchWindow(Adw.ApplicationWindow):
         lib.connect('episode-changed', lambda _l, i: self._sync_rows(i))
         lib.connect('download-progress', lambda _l, i, _f: self._sync_rows(i))
         lib.connect('stations-changed', lambda *_: self._sync_rows(None))
-        lib.connect('podcasts-changed', lambda *_: self._update_counts())
+        lib.connect('podcasts-changed', lambda *_: self._sync_rows(None))
         lib.connect('queue-changed', lambda *_: (self._update_counts(), self.bar.sync_item()))
         lib.connect('message', lambda _l, m: self.toast(m))
         lib.connect('refreshing', self._refreshing)
@@ -226,7 +226,7 @@ class FinchWindow(Adw.ApplicationWindow):
                     r._sync_play()
                 elif ep_id is None or r.key() == ep_id:
                     r.sync()
-            elif isinstance(r, StationRow):
+            elif isinstance(r, StationRow) or hasattr(r, 'sync'):
                 r.sync()
         self._update_counts()
 

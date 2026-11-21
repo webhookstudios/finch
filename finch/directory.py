@@ -12,8 +12,8 @@ from .net import fetch
 RADIO = 'https://all.api.radio-browser.info/json'
 
 
-def _json(url):
-    return json.loads(fetch(url).decode('utf-8', 'replace'))
+def _json(url, timeout=25):
+    return json.loads(fetch(url, timeout=timeout).decode('utf-8', 'replace'))
 
 
 def _show(r):
@@ -31,10 +31,29 @@ def search_podcasts(term, country='US', limit=40):
     return [s for s in (_show(r) for r in data.get('results', [])) if s['feed']]
 
 
+def _chart_ids(country, limit):
+    """Show ids on the current chart. Two chart feeds exist; either one can be slow at times,
+    so try one with a short wait, then the other."""
+    errors = []
+    try:
+        data = _json(f'https://itunes.apple.com/{country.lower()}/rss/toppodcasts/limit={limit}/json', timeout=10)
+        ids = [e['id']['attributes']['im:id'] for e in data.get('feed', {}).get('entry', [])
+               if e.get('id', {}).get('attributes', {}).get('im:id')]
+        if ids:
+            return ids
+    except Exception as e:  # fall through to the other chart
+        errors.append(e)
+    try:
+        data = _json(f'https://rss.applemarketingtools.com/api/v2/{country.lower()}/podcasts/top/{limit}/podcasts.json',
+                     timeout=10)
+        return [r['id'] for r in data.get('feed', {}).get('results', []) if r.get('id')]
+    except Exception as e:
+        raise errors[0] if errors else e
+
+
 def top_podcasts(country='us', limit=40):
     """The current chart for a country, with feed addresses filled in."""
-    chart = _json(f'https://rss.applemarketingtools.com/api/v2/{country.lower()}/podcasts/top/{limit}/podcasts.json')
-    ids = [r['id'] for r in chart.get('feed', {}).get('results', []) if r.get('id')]
+    ids = _chart_ids(country, limit)
     if not ids:
         return []
     found = _json('https://itunes.apple.com/lookup?' + urllib.parse.urlencode({'id': ','.join(ids),

@@ -219,6 +219,36 @@ class Library(GObject.Object):
         self.save()
         self.emit('episode-changed', ep_id)
 
+    def mark_all_played(self, ids):
+        """Marks many episodes played at once. Returns what they were before, for undo.
+        Downloads are kept, unlike a single mark, since an undo couldn't bring them back."""
+        before = {i: dict(self.state[i]) if i in self.state else None for i in ids}
+        dropped = False
+        for i in ids:
+            s = self.state.setdefault(i, {})
+            s['played'] = True
+            s['seen'] = True
+            s.pop('pos', None)
+            if i in self.queue:
+                self.queue.remove(i)
+                dropped = True
+        self.save()
+        if dropped:
+            self.emit('queue-changed')
+        self.emit('podcasts-changed')
+        return before
+
+    def restore_states(self, before):
+        for i, old in before.items():
+            if old is None:
+                self.state.pop(i, None)
+            else:
+                old.pop('file', None)
+                cur_file = self.state.get(i, {}).get('file')
+                self.state[i] = dict(old, **({'file': cur_file} if cur_file else {}))
+        self.save()
+        self.emit('podcasts-changed')
+
     def mark_seen(self, ids):
         for i in ids:
             self.state.setdefault(i, {})['seen'] = True
