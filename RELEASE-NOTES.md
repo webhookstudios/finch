@@ -1,3 +1,10 @@
+# Finch 1.0.1
+
+- Mark All as Played, in a show's More menu, with Undo.
+- Discover: hover a show to get a + button that subscribes in one click.
+- The popular list loads reliably again, and Discover has Try Again if the directory can't be reached.
+- The volume percentage beside the slider no longer misses some changes.
+
 # Finch 1.0.0
 
 First release.
