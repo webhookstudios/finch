@@ -49,10 +49,10 @@ Finch has only been tested on Ubuntu 26.04 with GNOME 50.
 
 ### With the deb package (recommended)
 
-Download `finch-player_1.0.1_all.deb` from the [latest release](https://github.com/webhookstudios/finch/releases/latest), then install it:
+Download `finch-player_1.0.2_all.deb` from the [latest release](https://github.com/webhookstudios/finch/releases/latest), then install it:
 
 ```bash
-sudo apt install ./finch-player_1.0.1_all.deb
+sudo apt install ./finch-player_1.0.2_all.deb
 ```
 
 The package and the command are called `finch-player`, because Ubuntu already has an unrelated program named `finch`.
